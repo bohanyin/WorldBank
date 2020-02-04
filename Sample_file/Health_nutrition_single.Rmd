@@ -1,0 +1,138 @@
+---
+title: "sample"
+author: "bohan yin"
+date: "1/27/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(dplyr)
+library(rvest)
+library(tidyverse)
+library(stringi)
+library(stringr)
+library(tidytext)
+library(topicmodels)
+library(wordcloud)
+library(tidyr)
+library(knitr)
+library()
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+file.list <- list.files(pattern='*.xlsx')
+df.list <- lapply(file.list, read_excel)
+
+df <- bind_rows(df.list, .id = "id")
+
+df_sample <- df %>%
+    subset(Sector == "Health, Nutrition & Population")
+df_sample %>% group_by(Country) %>%
+  count()
+  
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+question_token <- df_sample %>%
+  unnest_tokens(output = word,
+                 input = Question) %>%
+  anti_join(stop_words, by = 'word')
+  #               token = "ngrams", n = 2) %>%
+  #    separate(word, c("word1", "word2"), sep = " ") %>% 
+  # filter(!word1 %in% stop_words$word) %>%
+  # filter(!word2 %in% stop_words$word) %>% 
+  # unite(word,word1, word2, sep = " ")
+  
+
+```
+
+```{r}
+# convert to dtm
+question_dtm <- question_token %>%
+  # get count of each token in each document
+  count(id, word) %>%
+  # create a document-term matrix with all features and tf weighting
+  cast_dtm(document = id, term = word, value = n) 
+
+```
+
+```{r}
+question_lda <- LDA(question_dtm, k = 14, control = list(seed = 123))
+question_lda_td <- tidy(question_lda)
+
+# tpcs <- topics(x,K=5*(1:5), verb=10)
+
+top_terms <- question_lda_td %>%
+  group_by(topic) %>%
+  top_n(8, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+```
+
+```{r}
+top_terms %>%
+  mutate(topic = factor(topic),
+         term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(term, beta, fill = topic)) +
+  geom_bar(alpha = 0.8, stat = "identity", show.legend = FALSE) +
+  scale_x_reordered() +
+  labs(title = 'Health&Nutrition: Top terms per topic',
+       y = 'Probabilities of each term'
+  )+
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+```
+
+```{r}
+df_sample_g <- df %>%
+    subset(Sector == "Governance")
+df_sample_g %>% group_by(Country) %>%
+  count()
+question_token_g <- df_sample_g %>%
+  unnest_tokens(output = word,
+                 input = Question) %>%
+  anti_join(stop_words, by = 'word')
+
+# convert to dtm
+question_dtm_g <- question_token_g %>%
+  # get count of each token in each document
+  count(id, word) %>%
+  # create a document-term matrix with all features and tf weighting
+  cast_dtm(document = id, term = word, value = n) 
+
+question_lda_g <- LDA(question_dtm_g, k = 14, control = list(seed = 123))
+question_lda_td_g <- tidy(question_lda_g)
+
+# tpcs <- topics(x,K=5*(1:5), verb=10)
+
+top_terms_g <- question_lda_td_g %>%
+  group_by(topic) %>%
+  top_n(8, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+top_terms_g %>%
+  mutate(topic = factor(topic),
+         term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(term, beta, fill = topic)) +
+  geom_bar(alpha = 0.8, stat = "identity", show.legend = FALSE) +
+  scale_x_reordered() +
+  labs(title = 'Goverance: Top terms per topic',
+       y = 'Probabilities of each term'
+  )+
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+```
+
